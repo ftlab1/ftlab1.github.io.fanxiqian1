@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>风控鹰眼 v4.0 - 全链路智能反洗钱监测平台</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+
+    <style>
+        /* === 视觉系统: 极客防御 (Tech-Noir) === */
+        :root {
+            --bg-deep: #020617;
+            --neon-blue: #3b82f6;
+            --neon-cyan: #22d3ee;
+            --neon-purple: #8b5cf6;
+            --glass-bg: rgba(15, 23, 42, 0.8);
+            --glass-border: rgba(59, 130, 246, 0.2);
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: #e2e8f0;
+            font-family: 'Inter', 'PingFang SC', sans-serif;
+            margin: 0; padding: 0; overflow: hidden;
+        }
+
+        /* ==================== 1. 全局动效 ==================== */
+        @keyframes scanline { 0% { top: -10%; } 100% { top: 110%; } }
+        .scanning::after {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.1), transparent);
+            height: 100px; width: 100%; animation: scanline 4s linear infinite; pointer-events: none;
+        }
+
+        /* ==================== 2. 首页 (Landing) 优化 ==================== */
+        #landing-page {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background: radial-gradient(circle at 50% 50%, #1e293b 0%, #020617 100%);
+            overflow-y: auto; scrollbar-width: none;
+        }
+        
+        .hero-title {
+            background: linear-gradient(135deg, #fff 30%, var(--neon-cyan) 100%);
+            -webkit-background-clip: text; color: transparent;
+            filter: drop-shadow(0 0 15px rgba(34, 211, 238, 0.3));
+        }
+
+        .capability-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .capability-card:hover {
+            transform: translateY(-8px) scale(1.01);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 20px 40px -20px rgba(34, 211, 238, 0.4);
+        }
+
+        /* ==================== 3. 业务应用 (App) 布局 ==================== */
+        #app-container { display: none; height: 100vh; width: 100vw; opacity: 0; transition: opacity 0.8s ease; }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            position: relative;
+        }
+
+        /* 菜单项激活态 */
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(59,130,246,0.2) 0%, transparent 100%);
+            border-left: 4px solid var(--neon-cyan);
+            color: #fff;
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+        /* 加载屏动画 */
+        .loader-bar { height: 2px; width: 0; background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); transition: width 0.3s ease; }
+    </style>
+</head>
+<body class="scanning">
+
+    <div id="landing-page">
+        <div class="absolute inset-0 opacity-20 pointer-events-none">
+            <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full blur-[120px] animate-pulse"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600 rounded-full blur-[120px] animate-pulse" style="animation-delay: 2s;"></div>
+        </div>
+
+        <header class="w-full py-6 px-12 flex justify-between items-center z-10 sticky top-0 bg-black/40 backdrop-blur-md border-b border-white/5">
+            <div class="flex items-center gap-3 group cursor-pointer">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/50 group-hover:rotate-180 transition-transform duration-700">
+                    <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                </div>
+                <span class="text-xl font-black tracking-tighter text-white">HAWKEYE <span class="text-cyan-400">鹰眼 4.0</span></span>
+            </div>
+            <nav class="hidden md:flex gap-8 text-sm font-medium text-slate-400">
+                <a href="#" class="hover:text-cyan-400 transition">算法演进</a>
+                <a href="#" class="hover:text-cyan-400 transition">数据联邦</a>
+                <a href="#" class="hover:text-cyan-400 transition">合规生态</a>
+            </nav>
+            <button onclick="openLogin()" class="px-6 py-2 bg-white text-black text-sm font-bold rounded-full hover:bg-cyan-400 transition transform hover:scale-105">
+                进入控制台
+            </button>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-6 pt-24 pb-32 relative z-10">
+            <div class="text-center mb-24">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold mb-8">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                    </span>
+                    NEXT-GEN AML INTELLIGENCE
+                </div>
+                <h1 class="text-7xl font-black mb-8 leading-[1.1]">
+                    穿透数字伪装<br>
+                    <span class="hero-title">定义反洗钱新标准</span>
+                </h1>
+                <p class="text-slate-400 text-xl max-w-3xl mx-auto leading-relaxed font-light">
+                    整合 <span class="text-white border-b border-cyan-500/50">多Agent博弈</span> 与 <span class="text-white border-b border-cyan-500/50">隐私计算</span> 技术的全链路监测平台，
+                    为金融机构提供从秒级感知到司法级溯源的完整闭环方案。
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="capability-card p-10 rounded-2xl">
+                    <div class="text-cyan-400 text-3xl mb-6"><i class="fa-solid fa-brain"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-4">博弈对抗 Agent</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">内嵌强化学习模型，在模拟沙盘中与洗钱策略实时演化，提前预测新型资金洗发。</p>
+                </div>
+                <div class="capability-card p-10 rounded-2xl">
+                    <div class="text-purple-400 text-3xl mb-6"><i class="fa-solid fa-diagram-project"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-4">全息关系图谱</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">毫秒级检索十亿级实体节点，自动识别穿透壳公司与复杂的环形转账链路。</p>
+                </div>
+                <div class="capability-card p-10 rounded-2xl">
+                    <div class="text-blue-400 text-3xl mb-6"><i class="fa-solid fa-fingerprint"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-4">语义隐意解码</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">利用 Transformer 深度解析社交媒体与交易备注中的黑话暗语，识别准确率突破 99.2%。</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="py-12 text-center border-t border-white/5 bg-black/20">
+            <p class="text-slate-500 text-xs tracking-widest uppercase">© 2026 东北财经大学 · 金融科技实验室 · HAWKEYE TEAM</p>
+        </footer>
+    </div>
+
+    <div id="login-modal" class="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[10000] hidden items-center justify-center opacity-0 transition-opacity duration-500">
+        <div class="w-96 p-8 glass-panel border-cyan-500/30 text-center">
+            <h2 class="text-2xl font-bold text-white mb-8">系统鉴权</h2>
+            <form onsubmit="handleLogin(event)" class="space-y-6">
+                <input type="text" class="w-full bg-black/40 border border-slate-700 p-3 rounded-lg text-white focus:border-cyan-500 outline-none transition" placeholder="工号/ID" required>
+                <input type="password" class="w-full bg-black/40 border border-slate-700 p-3 rounded-lg text-white focus:border-cyan-500 outline-none transition" placeholder="访问令牌" required>
+                <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg transition-all shadow-[0_0_20px_rgba(8,145,178,0.3)]">
+                    初始化核心链路
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="loader-screen" class="fixed inset-0 bg-[#020617] z-[10001] hidden flex-col items-center justify-center">
+        <div class="mb-6"><i class="fa-solid fa-compass-drafting text-4xl text-cyan-400 animate-bounce"></i></div>
+        <div class="text-xs font-mono text-cyan-500/70 mb-4 tracking-[0.3em]" id="loader-text">SYSTEM LOADING...</div>
+        <div class="w-64 h-[2px] bg-slate-800 rounded-full overflow-hidden">
+            <div id="loader-bar" class="loader-bar"></div>
+        </div>
+    </div>
+
+    <div id="app-container" class="flex overflow-hidden">
+        <aside class="w-64 bg-[#0b1121] border-r border-white/5 flex flex-col z-50">
+            <div class="h-20 flex items-center px-6 gap-3">
+                <i class="fa-solid fa-eye text-cyan-400 text-xl"></i>
+                <span class="font-bold tracking-tighter">HAWKEYE <span class="text-xs block text-slate-500">MONITOR SYSTEM</span></span>
+            </div>
+
+            <nav class="flex-1 py-4">
+                <div class="px-6 py-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest">监控矩阵</div>
+                <a href="javascript:void(0)" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item active flex items-center px-6 py-4 text-slate-400 hover:text-white transition group">
+                    <i class="fa-solid fa-gauge-high w-8 group-hover:text-cyan-400"></i> 态势驾驶舱
+                </a>
+                <a href="javascript:void(0)" onclick="switchTab('semantics')" id="nav-semantics" class="nav-item flex items-center px-6 py-4 text-slate-400 hover:text-white transition group">
+                    <i class="fa-solid fa-microchip w-8 group-hover:text-cyan-400"></i> 语义实验室
+                </a>
+                <a href="javascript:void(0)" onclick="switchTab('investigation')" id="nav-investigation" class="nav-item flex items-center px-6 py-4 text-slate-400 hover:text-white transition group">
+                    <i class="fa-solid fa-magnifying-glass-nodes w-8 group-hover:text-cyan-400"></i> 追踪溯源
+                </a>
+
+                <div class="px-6 py-2 mt-6 text-[10px] text-slate-500 font-bold uppercase tracking-widest">管理</div>
+                <a href="javascript:void(0)" onclick="switchTab('settings')" class="nav-item flex items-center px-6 py-4 text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-sliders w-8"></i> 策略中心
+                </a>
+            </nav>
+
+            <div class="p-6 border-t border-white/5 bg-black/20">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold">孙</div>
+                    <div class="text-xs">
+                        <p class="text-white font-bold">孙千越</p>
+                        <p class="text-emerald-500">已授权登录</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-[#020617] relative">
+            <header class="h-16 border-b border-white/5 bg-[#0b1121]/50 backdrop-blur flex items-center justify-between px-8 z-40">
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span class="text-xs text-slate-400">核心引擎: 运行中</span>
+                    </div>
+                    <div class="h-4 w-[1px] bg-slate-800"></div>
+                    <span class="text-xs text-slate-500 font-mono">NODE_SHANGHAI_04</span>
+                </div>
+                <div class="flex gap-4">
+                    <button class="px-4 py-1.5 bg-cyan-600/10 border border-cyan-500/30 text-cyan-400 text-xs rounded-md hover:bg-cyan-600/20 transition">导出研判报告</button>
+                    <button onclick="location.reload()" class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-800 text-slate-400 hover:text-white"><i class="fa-solid fa-arrow-rotate-right text-xs"></i></button>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                
+                <div id="view-dashboard" class="space-y-8 animate-fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="glass-panel p-6">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">信号处理/秒</span>
+                            <div class="flex items-end gap-2 mt-2">
+                                <h3 class="text-3xl font-black text-white">4,129</h3>
+                                <span class="text-xs text-emerald-500 mb-1">+12%</span>
+                            </div>
+                            <div id="mini-chart-1" class="h-12 w-full mt-4"></div>
+                        </div>
+                        <div class="glass-panel p-6">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">今日风险拦截</span>
+                            <div class="flex items-end gap-2 mt-2">
+                                <h3 class="text-3xl font-black text-red-500">182</h3>
+                                <span class="text-xs text-slate-500 mb-1">件</span>
+                            </div>
+                            <div id="mini-chart-2" class="h-12 w-full mt-4"></div>
+                        </div>
+                        <div class="glass-panel p-6">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">模型共识率</span>
+                            <div class="flex items-end gap-2 mt-2">
+                                <h3 class="text-3xl font-black text-cyan-400">99.8%</h3>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1 mt-6 rounded-full overflow-hidden">
+                                <div class="bg-cyan-500 h-full w-[99%]"></div>
+                            </div>
+                        </div>
+                        <div class="glass-panel p-6">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">司法证据转换</span>
+                            <div class="flex items-end gap-2 mt-2">
+                                <h3 class="text-3xl font-black text-purple-400">100%</h3>
+                            </div>
+                            <div id="mini-chart-3" class="h-12 w-full mt-4"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-12 gap-8">
+                        <div class="col-span-12 lg:col-span-8 glass-panel overflow-hidden">
+                            <div class="p-6 border-b border-white/5 flex justify-between items-center">
+                                <h4 class="font-bold text-white flex items-center gap-2"><i class="fa-solid fa-earth-asia text-cyan-500"></i> 跨境资金风险流向</h4>
+                                <div class="flex gap-2">
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">高危渗透点</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">安全中心</span>
+                                </div>
+                            </div>
+                            <div id="main-map" class="w-full h-[500px]"></div>
+                        </div>
+                        <div class="col-span-12 lg:col-span-4 flex flex-col gap-8">
+                            <div class="glass-panel flex-1 flex flex-col overflow-hidden">
+                                <div class="p-6 border-b border-white/5 font-bold">实时预警流</div>
+                                <div class="flex-1 overflow-y-auto p-4 space-y-4" id="alert-stream">
+                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-semantics" class="hidden space-y-8 animate-fade-in">
+                    <div class="grid grid-cols-12 gap-8">
+                        <div class="col-span-12 lg:col-span-7 glass-panel p-8">
+                            <h4 class="font-bold text-white mb-8">隐意黑话聚类 (Semantic Space)</h4>
+                            <div id="semantic-chart" class="w-full h-[600px]"></div>
+                        </div>
+                        <div class="col-span-12 lg:col-span-5 flex flex-col gap-8">
+                            <div class="glass-panel p-6">
+                                <h4 class="font-bold text-white mb-6">高频黑话词云</h4>
+                                <div id="word-cloud" class="w-full h-[250px]"></div>
+                            </div>
+                            <div class="glass-panel flex-1 bg-black/40 overflow-hidden flex flex-col">
+                                <div class="p-4 border-b border-white/5 bg-slate-900/50 flex justify-between items-center">
+                                    <span class="text-xs font-bold">语义解码控制台</span>
+                                    <span class="text-[10px] text-cyan-400 font-mono">NLP_DECODER_v4</span>
+                                </div>
+                                <div class="flex-1 p-6 font-mono text-xs space-y-4 overflow-y-auto" id="nlp-logs">
+                                    <p class="text-slate-500">[10:24:01] 分析备注: "茶叶五斤，老地方见"...</p>
+                                    <p class="text-cyan-400">[10:24:01] 检出黑话: "茶叶" -> 非法资金 (98.4%)</p>
+                                    <p class="text-slate-500">[10:24:15] 监听频道: Telegram Group_882...</p>
+                                    <p class="text-red-400">[10:24:16] 检出攻击指令: "跑分骡子集结"</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-investigation" class="hidden space-y-8 animate-fade-in h-[800px]">
+                    <div class="grid grid-cols-4 gap-8 h-full">
+                        <div class="col-span-3 glass-panel relative overflow-hidden">
+                            <div class="absolute top-6 left-6 z-10 space-y-2">
+                                <h2 class="text-2xl font-black">证据链全息穿透</h2>
+                                <p class="text-xs text-slate-500">正在分析账户: 0x82...1b92 (重点监控)</p>
+                            </div>
+                            <div id="relation-graph" class="w-full h-full"></div>
+                        </div>
+                        <div class="glass-panel flex flex-col overflow-hidden">
+                            <div class="p-6 border-b border-white/5 font-bold">证据链时间轴</div>
+                            <div class="flex-1 overflow-y-auto p-6 space-y-8 relative">
+                                <div class="absolute left-8 top-8 bottom-8 w-[1px] bg-slate-800"></div>
+                                <div class="relative pl-10">
+                                    <div class="absolute left-[3px] top-1.5 w-3 h-3 rounded-full bg-cyan-500 shadow-[0_0_10px_cyan]"></div>
+                                    <p class="text-[10px] text-slate-500 mb-1">2026-03-09 10:12</p>
+                                    <p class="text-sm font-bold">异常归集</p>
+                                    <p class="text-xs text-slate-400 mt-1">52个子账户向主账户汇入 1,200,000 RMB</p>
+                                </div>
+                                <div class="relative pl-10">
+                                    <div class="absolute left-[3px] top-1.5 w-3 h-3 rounded-full bg-purple-500"></div>
+                                    <p class="text-[10px] text-slate-500 mb-1">2026-03-09 10:15</p>
+                                    <p class="text-sm font-bold">USDT 跨链</p>
+                                    <p class="text-xs text-slate-400 mt-1">资金转换为 18万 USDT 进入混币池</p>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-red-600/10 border-t border-red-500/20">
+                                <button class="w-full py-2 bg-red-600 text-white text-xs font-bold rounded">生成冻结法律文书</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const store = {
+            charts: {},
+            activeTab: 'dashboard'
+        };
+
+        // 1. 登录控制
+        function openLogin() {
+            const modal = document.getElementById('login-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => modal.style.opacity = '1', 50);
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const modal = document.getElementById('login-modal');
+            const landing = document.getElementById('landing-page');
+            const loader = document.getElementById('loader-screen');
+            const app = document.getElementById('app-container');
+            const bar = document.getElementById('loader-bar');
+
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                landing.style.filter = 'blur(20px)';
+                landing.style.opacity = '0';
+                loader.classList.remove('hidden');
+                loader.classList.add('flex');
+                
+                // 模拟加载过程
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            loader.style.opacity = '0';
+                            setTimeout(() => {
+                                loader.classList.add('hidden');
+                                landing.classList.add('hidden');
+                                app.classList.remove('hidden');
+                                app.classList.add('flex');
+                                setTimeout(() => {
+                                    app.style.opacity = '1';
+                                    initSystemCharts();
+                                }, 50);
+                            }, 500);
+                        }, 500);
+                    }
+                    bar.style.width = progress + '%';
+                }, 200);
+            }, 500);
+        }
+
+        // 2. 菜单切换
+        function switchTab(tabId) {
+            document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            document.getElementById('view-' + tabId).classList.remove('hidden');
+            document.getElementById('nav-' + tabId).classList.add('active');
+            
+            // 延迟重绘以适应容器大小
+            setTimeout(() => {
+                Object.values(store.charts).forEach(c => c && c.resize());
+            }, 50);
+        }
+
+        // 3. 初始化图表 (部分核心图表)
+        function initSystemCharts() {
+            // 地图
+            const mapChart = echarts.init(document.getElementById('main-map'));
+            store.charts.map = mapChart;
+            mapChart.setOption({
+                backgroundColor: 'transparent',
+                geo: {
+                    map: 'world', // 注意：实际应用中需引入中国地图json，此处暂用逻辑坐标
+                    show: false
+                },
+                series: [
+                    {
+                        type: 'lines',
+                        zlevel: 1,
+                        effect: { show: true, period: 4, trailLength: 0.7, color: '#22d3ee', symbolSize: 3 },
+                        lineStyle: { color: '#22d3ee', width: 1, opacity: 0.1, curveness: 0.3 },
+                        data: [
+                            { coords: [[100, 30], [120, 20]] },
+                            { coords: [[120, 20], [110, 40]] },
+                            { coords: [[40, 50], [100, 30]] }
+                        ]
+                    },
+                    {
+                        type: 'effectScatter',
+                        coordinateSystem: 'cartesian2d', // 简单逻辑坐标演示
+                        data: [
+                            { name: '北京', value: [100, 80], itemStyle: { color: '#22d3ee' } },
+                            { name: '云南', value: [40, 20], itemStyle: { color: '#ef4444' } }
+                        ],
+                        symbolSize: 15
+                    }
+                ],
+                xAxis: { show: false, min: 0, max: 200 },
+                yAxis: { show: false, min: 0, max: 100 }
+            });
+
+            // 语义聚类
+            const semChart = echarts.init(document.getElementById('semantic-chart'));
+            store.charts.sem = semChart;
+            semChart.setOption({
+                grid: { top: 20, bottom: 20, left: 20, right: 20 },
+                xAxis: { splitLine: { show: false } },
+                yAxis: { splitLine: { show: false } },
+                series: [{
+                    type: 'scatter',
+                    data: Array.from({length: 100}, () => [Math.random()*10, Math.random()*10, Math.random()*50]),
+                    symbolSize: (data) => data[2] / 2,
+                    itemStyle: {
+                        color: new echarts.graphic.RadialGradient(0.4, 0.3, 1, [
+                            { offset: 0, color: '#22d3ee' },
+                            { offset: 1, color: '#0891b2' }
+                        ]),
+                        opacity: 0.6
+                    }
+                }]
+            });
+
+            // 预警流模拟
+            const alertBox = document.getElementById('alert-stream');
+            const addAlert = () => {
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-white/5 border-l-2 border-cyan-500 rounded animate-fade-in';
+                div.innerHTML = `
+                    <div class="flex justify-between mb-1">
+                        <span class="text-[10px] font-bold text-cyan-400">SIGN_DETECTED</span>
+                        <span class="text-[10px] text-slate-500">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    <p class="text-xs text-slate-300">检测到来自 缅北 地区的异常备注扫描...</p>
+                `;
+                alertBox.prepend(div);
+                if(alertBox.children.length > 5) alertBox.lastChild.remove();
+            };
+            setInterval(addAlert, 4000);
+
+            // 关系图谱
+            const relChart = echarts.init(document.getElementById('relation-graph'));
+            store.charts.rel = relChart;
+            relChart.setOption({
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    symbolSize: 40,
+                    draggable: true,
+                    data: [
+                        { name: '核心账户', itemStyle: { color: '#ef4444' } },
+                        { name: '洗钱节点1' }, { name: '洗钱节点2' }, { name: '傀儡1' }, { name: '傀儡2' }
+                    ],
+                    links: [
+                        { source: '核心账户', target: '洗钱节点1' },
+                        { source: '核心账户', target: '洗钱节点2' },
+                        { source: '洗钱节点1', target: '傀儡1' },
+                        { source: '洗钱节点2', target: '傀儡2' }
+                    ],
+                    lineStyle: { color: '#334155', width: 2 }
+                }]
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            Object.values(store.charts).forEach(c => c && c.resize());
+        });
+    </script>
+</body>
+</html>
